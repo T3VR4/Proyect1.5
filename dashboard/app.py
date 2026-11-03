@@ -1,19 +1,31 @@
 import streamlit as st
 import duckdb
 import pandas as pd
+import os
+import subprocess
 
 # Configuración de la página del dashboard
 st.set_page_config(page_title="Dashboard de Transacciones", page_icon="📊", layout="wide")
 
+DB_PATH = "data/analytics.duckdb"
+
+# Función para verificar y construir los datos si no existen (ideal para la nube)
+def ensure_data_exists():
+    if not os.path.exists(DB_PATH):
+        st.info("⚙️ Generando datos sintéticos y procesando ETL inicial en la nube...")
+        # Ejecuta el generador y el etl automáticamente
+        subprocess.run(["python", "src/generate_data.py"], check=True)
+        subprocess.run(["python", "src/etl.py"], check=True)
+
+# Asegurar que los datos estén listos antes de cargar
+ensure_data_exists()
+
 st.title("📊 Panel de Control y Analítica de Transacciones")
 st.markdown("Visualización interactiva conectada directamente a nuestra base de datos analítica local con **DuckDB**.")
 
-# Conexión a DuckDB
-DB_PATH = "data/analytics.duckdb"
-
 @st.cache_data
 def load_data():
-    if not pd.io.common.file_exists(DB_PATH):
+    if not os.path.exists(DB_PATH):
         return None
     con = duckdb.connect(DB_PATH, read_only=True)
     df = con.execute("SELECT * FROM transactions").fetchdf()
@@ -23,7 +35,7 @@ def load_data():
 df = load_data()
 
 if df is None or df.empty:
-    st.warning("⚠️ No se encontró la base de datos o está vacía. Ejecuta primero el script ETL (`python src/etl.py`).")
+    st.warning("⚠️ No se encontró la base de datos o está vacía.")
 else:
     # --- MÉTRICAS PRINCIPALES ---
     total_sales = df['total_amount'].sum()
