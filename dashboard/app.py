@@ -2,26 +2,63 @@ import streamlit as st
 import duckdb
 import pandas as pd
 import os
-import subprocess
+from faker import Faker
+import random
+from datetime import datetime, timedelta
 
 # Configuración de la página del dashboard
 st.set_page_config(page_title="Dashboard de Transacciones", page_icon="📊", layout="wide")
 
 DB_PATH = "data/analytics.duckdb"
 
-# Función para verificar y construir los datos si no existen (ideal para la nube)
-def ensure_data_exists():
+def generate_and_load_data():
+    """Genera datos sintéticos y crea la base de datos DuckDB si no existe."""
+    os.makedirs("data/raw", exist_ok=True)
+    
+    # Si la base de datos no existe, la creamos al vuelo
     if not os.path.exists(DB_PATH):
-        st.info("⚙️ Generando datos sintéticos y procesando ETL inicial en la nube...")
-        # Ejecuta el generador y el etl automáticamente
-        subprocess.run(["python", "src/generate_data.py"], check=True)
-        subprocess.run(["python", "src/etl.py"], check=True)
+        fake = Faker()
+        Faker.seed(42)
+        random.seed(42)
+        
+        products = [
+            {"name": "Laptop Pro 15", "price": 1200.00},
+            {"name": "Wireless Mouse", "price": 25.50},
+            {"name": "Mechanical Keyboard", "price": 85.00},
+            {"name": "UltraWide Monitor 27", "price": 350.00},
+            {"name": "USB-C Hub Multiport", "price": 45.00},
+            {"name": "Noise-Cancelling Headphones", "price": 199.99}
+        ]
+        locations = ["Buenos Aires", "Córdoba", "Rosario", "Mendoza", "Puerto Madryn"]
+        
+        data = []
+        # Generamos una muestra eficiente para la nube
+        for i in range(1, 5001):
+            prod = random.choice(products)
+            qty = random.randint(1, 5)
+            data.append({
+                "transaction_id": f"TXN-{i:05d}",
+                "date": fake.date_between(start_date='-1y', end_date='today').strftime('%Y-%m-%d'),
+                "customer_email": fake.email(),
+                "product_name": prod["name"],
+                "quantity": qty,
+                "unit_price": prod["price"],
+                "total_amount": qty * prod["price"],
+                "store_location": random.choice(locations)
+            })
+            
+        df_synthetic = pd.DataFrame(data)
+        
+        # Conectar y guardar en DuckDB
+        con = duckdb.connect(DB_PATH)
+        con.execute("CREATE OR REPLACE TABLE transactions AS SELECT * FROM df_synthetic")
+        con.close()
 
-# Asegurar que los datos estén listos antes de cargar
-ensure_data_exists()
+# Asegurar que los datos y la BD existen antes de cargar
+generate_and_load_data()
 
 st.title("📊 Panel de Control y Analítica de Transacciones")
-st.markdown("Visualización interactiva conectada directamente a nuestra base de datos analítica local con **DuckDB**.")
+st.markdown("Visualización interactiva conectada directamente a nuestra base de datos analítica con **DuckDB**.")
 
 @st.cache_data
 def load_data():
